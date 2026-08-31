@@ -604,13 +604,13 @@ function download(name, url) {
   anchor.click();
 }
 function exportPng() {
-  if (state.chart) download("portle-chart.png", state.chart.toBase64Image());
+  if (state.chart) download("odv-chart.png", state.chart.toBase64Image());
 }
 function exportSvg() {
   let canvas = el.chartArea.querySelector("canvas");
   if (!canvas) return;
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${canvas.width}" height="${canvas.height}"><image href="${canvas.toDataURL("image/png")}" width="100%" height="100%"/></svg>`;
-  download("portle-chart.svg", URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" })));
+  download("odv-chart.svg", URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" })));
 }
 function findHeader(grid, minCols) {
   return grid.findIndex(
@@ -710,7 +710,7 @@ function csvRows(grid) {
 }
 function datasetUrl(url) {
   // BOM publishes some legacy HTTP links. Loading them from a deployed HTTPS
-  // Portle page is blocked as mixed content even though the same resource is
+  // page is blocked as mixed content even though the same resource is
   // also available securely.
   return /^http:\/\/www\.bom\.gov\.au\//i.test(url)
     ? url.replace(/^http:/i, "https:")

@@ -1,6 +1,6 @@
-# Portle
+# Open data visualiser
 
-Portle is a minimum viable visualiser for open-source datasets.
+A minimum viable visualiser for open-source datasets.
 
 <img width="1198" height="650" alt="Screenshot 2026-08-30 at 2 28 49 pm" src="https://github.com/user-attachments/assets/70bff3d9-6305-4dac-b7d5-a46d9fb30a28" />
 
@@ -11,4 +11,4 @@ We love open-source data. But publishing open data is hard for Government and no
 
 ## What it does
 
-Portle gives you a small snapshot of data without downloading it. Paste a URL to get a quick Chart.js view, with Portle making a best guess at how to display the data.
+ODV gives you a small snapshot of data without downloading it. Paste a URL to get a quick Chart.js view, with ODV making a best guess at how to display the data.
