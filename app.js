@@ -39,6 +39,43 @@ const TYPE_LABELS = {
 const $ = (id) => document.getElementById(id);
 const chartColor = (index = 0) => PALETTE[(state.colorOffset + index) % PALETTE.length];
 const chartPalette = () => PALETTE.map((_, index) => chartColor(index));
+// Scales treemap label font size to the tile's pixel dimensions, clamped to a readable range.
+const treemapFontSize = (raw) => {
+  const w = raw?.w || 0,
+    h = raw?.h || 0;
+  return Math.max(9, Math.min(16, Math.floor(Math.min(w, h) / 5)));
+};
+// Word-wraps a treemap tile's label (and value) to fit its width, capping the number of lines.
+const wrapTreemapLabel = (context) => {
+  const raw = context.raw,
+    ctx = context.chart.ctx,
+    size = treemapFontSize(raw),
+    font = `bold ${size}px ${Chart.defaults.font.family}`,
+    padding = 8,
+    maxWidth = Math.max(20, raw.w - padding),
+    maxLines = Math.max(1, Math.floor((raw.h - padding) / (size * 1.2)) - 1);
+  ctx.save();
+  ctx.font = font;
+  const words = String(raw.g).split(/\s+/),
+    lines = [];
+  let current = "";
+  for (const word of words) {
+    const test = current ? `${current} ${word}` : word;
+    if (current && ctx.measureText(test).width > maxWidth) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = test;
+    }
+  }
+  if (current) lines.push(current);
+  if (lines.length > maxLines) {
+    lines.length = maxLines;
+    lines[maxLines - 1] += "…";
+  }
+  ctx.restore();
+  return [...lines, raw.v.toLocaleString()];
+};
 const el = Object.fromEntries(
   [
     "datasetUrl",
@@ -520,8 +557,9 @@ function render() {
             align: "center",
             position: "middle",
             color: "#fdf6e3",
-            font: { weight: "bold" },
-            formatter: (context) => [context.raw.g, context.raw.v.toLocaleString()],
+            overflow: "fit",
+            font: (context) => ({ size: treemapFontSize(context.raw), weight: "bold" }),
+            formatter: (context) => wrapTreemapLabel(context),
           },
         },
       ],
