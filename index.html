@@ -8,6 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-treemap@3.1.0/dist/chartjs-chart-treemap.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas2svg@1.0.16/canvas2svg.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <link rel="stylesheet" href="style.css" />
   </head>
@@ -22,7 +23,10 @@
             Paste a public dataset URL, see the data and a useful starting chart.
           </p>
         </div>
-        <div class="status" id="status" role="status">WAITING FOR DATA</div>
+        <div class="header-actions">
+          <div class="status" id="status" role="status">WAITING FOR DATA</div>
+          <button id="resetButton" class="icon-button" type="button" title="Reset to first visit" aria-label="Reset to first visit"><i data-lucide="rotate-ccw"></i></button>
+        </div>
       </header>
       <section class="panel import">
         <label class="label" for="datasetUrl">Public dataset URL</label>
@@ -51,13 +55,26 @@
           <button class="demo" type="button" data-demo="penguin_measurements">Penguin Measurements</button>
         </div>
         <p class="hint">Supports CSV, TXT, XLSX, and JSON. Trimmed to the first 1,000 rows.</p>
+        <div class="cleaning" aria-label="Data cleaning">
+          <span>Clean values</span>
+          <label class="checkbox-label" for="cleanCurrency"
+            ><input type="checkbox" id="cleanCurrency" checked /> Strip currency symbols</label
+          ><label class="checkbox-label" for="cleanParens"
+            ><input type="checkbox" id="cleanParens" checked /> Treat (123) as -123</label
+          ><label class="checkbox-label" for="cleanMissing"
+            ><input type="checkbox" id="cleanMissing" checked /> Ignore "N/A" markers</label
+          ><label class="checkbox-label" for="cleanHideOther"
+            ><input type="checkbox" id="cleanHideOther" checked /> Hide "Other" bucket</label
+          >
+        </div>
       </section>
       <div class="workspace">
         <section class="panel chart-panel">
           <div class="chart-heading">
             <span>Visualisation</span>
             <div class="exports" id="exports" hidden>
-              <button id="exportPngButton" class="icon-button" type="button" title="Export PNG" aria-label="Export PNG"><i data-lucide="image-down"></i></button>
+              <button id="exportPngButton" class="icon-button" type="button" title="Export PNG" aria-label="Export PNG"><i data-lucide="image-down"></i></button
+              ><button id="exportSvgButton" class="icon-button" type="button" title="Export SVG" aria-label="Export SVG"><i data-lucide="file-code-2"></i></button>
             </div>
           </div>
           <div class="toolbar">
@@ -72,11 +89,11 @@
               </select>
             </div>
             <div class="control" id="xColumnControl">
-              <label for="xColumn">X axis / group</label
+              <label for="xColumn" id="xColumnLabel">X axis / group</label
               ><select id="xColumn" disabled></select>
             </div>
             <div class="control" id="yColumnControl">
-              <label for="yColumn">Y axis / metric</label
+              <label for="yColumn" id="yColumnLabel">Y axis / metric</label
               ><select id="yColumn" multiple size="3" disabled></select
               ><span class="micro">Cmd/Ctrl-click to compare series</span>
             </div>

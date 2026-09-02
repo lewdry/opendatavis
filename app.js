@@ -18,7 +18,24 @@ Chart.defaults.font.family = "SFMono-Regular, Consolas, Liberation Mono, monospa
 Chart.defaults.plugins.tooltip.backgroundColor = "#eee8d5";
 Chart.defaults.plugins.tooltip.titleColor = "#586e75";
 Chart.defaults.plugins.tooltip.bodyColor = "#586e75";
-const state = { rows: [], columns: [], chart: null, source: "Awaiting source", colorOffset: 0 };
+const state = {
+  rows: [],
+  columns: [],
+  chart: null,
+  source: "Awaiting source",
+  colorOffset: 0,
+  typeOverrides: {},
+  cleaning: { stripCurrency: true, parenNegative: true, filterMissing: true, hideOther: true },
+};
+const TYPE_LABELS = {
+  numeric: "Number",
+  datetime: "Date",
+  categorical: "Category",
+  boolean: "Boolean",
+  text: "Text",
+  unknown: "Unknown",
+},
+  OVERRIDE_TYPES = ["numeric", "datetime", "categorical", "text", "boolean"];
 const $ = (id) => document.getElementById(id);
 const chartColor = (index = 0) => PALETTE[(state.colorOffset + index) % PALETTE.length];
 const chartPalette = () => PALETTE.map((_, index) => chartColor(index));
@@ -36,7 +53,9 @@ const el = Object.fromEntries(
     "previewState",
     "chartType",
     "xColumn",
+    "xColumnLabel",
     "yColumn",
+    "yColumnLabel",
     "maxEntries",
     "maxEntriesValue",
     "logScale",
@@ -46,38 +65,51 @@ const el = Object.fromEntries(
     "appShell",
     "exports",
     "exportPngButton",
+    "exportSvgButton",
+    "resetButton",
+    "cleanCurrency",
+    "cleanParens",
+    "cleanMissing",
+    "cleanHideOther",
   ].map((id) => [id, $(id)]),
 );
-const blank = (v) =>
-  v === null ||
-  v === undefined ||
-  [
+const ALWAYS_BLANK = [
     "",
     "blank",
     "empty",
     "(blank)",
     "(empty)",
     "null",
-    "n/a",
-    "na",
     "undefined",
     "nil",
     "none",
     "not applicable",
-  ].includes(String(v).trim().toLowerCase());
+  ],
+  MISSING_MARKERS = ["n/a", "na"];
+const blank = (v) => {
+  if (v === null || v === undefined) return true;
+  let s = String(v).trim().toLowerCase();
+  return (
+    ALWAYS_BLANK.includes(s) || (state.cleaning.filterMissing && MISSING_MARKERS.includes(s))
+  );
+};
 const num = (v) => {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (v instanceof Date) return null;
   if (typeof v !== "string" && typeof v !== "number") return null;
   let s = String(v).trim();
   if (!s || ["nan", "infinity", "-infinity", "+infinity"].includes(s.toLowerCase())) return null;
-  let parenMatch = s.match(/^\(([^\)]+)\)$/);
   let negative = false;
-  if (parenMatch) {
-    negative = true;
-    s = parenMatch[1].trim();
+  if (state.cleaning.parenNegative) {
+    let parenMatch = s.match(/^\(([^\)]+)\)$/);
+    if (parenMatch) {
+      negative = true;
+      s = parenMatch[1].trim();
+    }
   }
-  let cleaned = s.replace(/[$€£¥₹,\s%]/g, "");
+  let cleaned = s
+    .replace(/,/g, "")
+    .replace(state.cleaning.stripCurrency ? /[$€£¥₹%\s]/g : /\s/g, "");
   if (!cleaned || cleaned === "-" || cleaned === "+") return null;
   let val = Number(cleaned);
   if (!Number.isFinite(val)) return null;
@@ -323,8 +355,9 @@ function options(x, y, legend = false, radial = false) {
 }
 function truncateAggregate(entries, maxItems = 10) {
   if (entries.length <= maxItems) return entries;
-  let top = entries.slice(0, maxItems),
-    restSum = entries.slice(maxItems).reduce((acc, [, value]) => acc + value, 0);
+  let top = entries.slice(0, maxItems);
+  if (state.cleaning.hideOther) return top;
+  let restSum = entries.slice(maxItems).reduce((acc, [, value]) => acc + value, 0);
   return [...top, ["Other", restSum]];
 }
 function groupCount(x) {
@@ -422,6 +455,8 @@ function render() {
     xType = state.columns.find((column) => column.key === x)?.type,
     grouped = type !== "scatter" && xType !== "datetime" && xType !== "numeric";
   if (!x || !ys.length || !state.rows.length) return;
+  el.xColumnLabel.textContent = "X axis / group";
+  el.yColumnLabel.textContent = "Y axis / metric";
   syncViewOptions(x, ys, type, grouped);
   let limit = el.maxEntries.disabled ? Infinity : Number(el.maxEntries.value);
   if (state.chart) {
@@ -601,6 +636,8 @@ function render() {
         config.scales.y.title.text,
         config.scales.x.title.text,
       ];
+      el.xColumnLabel.textContent = "Y axis / group";
+      el.yColumnLabel.textContent = "X axis / metric";
     }
   }
   let canvas = document.createElement("canvas");
@@ -620,7 +657,16 @@ function display() {
       let pct = state.rows.length
         ? Math.round(((state.rows.length - c.nulls) / state.rows.length) * 100)
         : 100;
-      d.innerHTML = `<span class="name" title="${c.key}">${c.key}</span><span class="type">${c.type} · ${pct}%</span>`;
+      d.innerHTML = `<span class="name" title="${c.key}">${c.key}</span>`;
+      let typeWrap = document.createElement("span"),
+        select = document.createElement("select");
+      typeWrap.className = "type";
+      select.className = "type-select";
+      select.title = "Override the detected column type";
+      select.append(...OVERRIDE_TYPES.map((t) => opt(TYPE_LABELS[t], t, t === c.type)));
+      select.onchange = () => setColumnType(c.key, select.value);
+      typeWrap.append(select, document.createTextNode(` · ${pct}%`));
+      d.append(typeWrap);
       return d;
     }),
   );
@@ -628,6 +674,43 @@ function display() {
   el.preview.textContent = JSON.stringify(state.rows.slice(0, 4), null, 2);
   el.previewState.textContent = "First 4 rows";
   lucide.createIcons();
+}
+function applyTypeOverrides() {
+  for (let key in state.typeOverrides) {
+    let col = state.columns.find((c) => c.key === key);
+    if (col) col.type = state.typeOverrides[key];
+  }
+}
+// Refreshes selects after the schema changes underneath the current chart, keeping
+// the user's axis choices where they're still valid and falling back sensibly otherwise.
+function refreshAfterSchemaChange() {
+  let x = el.xColumn.value,
+    ys = selectedY(),
+    type = el.chartType.value;
+  controls({ type, x, y: ys });
+  if (!selectedY().length) {
+    let numeric = state.columns.filter((c) => c.type === "numeric");
+    selectOnlyY(numeric.length ? pickMetric(numeric) : "__count__");
+  }
+  display();
+  render();
+}
+function setColumnType(key, type) {
+  let col = state.columns.find((c) => c.key === key);
+  if (!col) return;
+  col.type = type;
+  state.typeOverrides[key] = type;
+  refreshAfterSchemaChange();
+}
+function applyCleaning() {
+  state.cleaning.stripCurrency = el.cleanCurrency.checked;
+  state.cleaning.parenNegative = el.cleanParens.checked;
+  state.cleaning.filterMissing = el.cleanMissing.checked;
+  state.cleaning.hideOther = el.cleanHideOther.checked;
+  if (!state.rows.length) return;
+  state.columns = schema(state.rows);
+  applyTypeOverrides();
+  refreshAfterSchemaChange();
 }
 function loadRows(rows, source, configOverride) {
   let base = rows
@@ -641,6 +724,7 @@ function loadRows(rows, source, configOverride) {
   if (!state.rows.length) throw Error("No tabular rows were found in this file.");
   state.source = source;
   state.colorOffset = Math.floor(Math.random() * PALETTE.length);
+  state.typeOverrides = {};
   state.columns = schema(state.rows);
   let config = { ...guess(state.columns), ...configOverride };
   controls(config);
@@ -655,6 +739,30 @@ function download(name, url) {
 }
 function exportPng() {
   if (state.chart) download("odv-chart.png", state.chart.toBase64Image());
+}
+function exportSvg() {
+  if (!state.chart) return;
+  if (typeof C2S === "undefined") {
+    status("SVG EXPORT UNAVAILABLE", true);
+    return;
+  }
+  let canvas = state.chart.canvas,
+    width = canvas.clientWidth || canvas.width,
+    height = canvas.clientHeight || canvas.height,
+    ctx = new C2S(width, height),
+    clone = new Chart(ctx, {
+      type: state.chart.config.type,
+      data: state.chart.config.data,
+      options: {
+        ...state.chart.config.options,
+        responsive: false,
+        animation: false,
+        devicePixelRatio: 1,
+      },
+    });
+  let svg = ctx.getSerializedSvg(true);
+  clone.destroy();
+  download("odv-chart.svg", `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`);
 }
 function findHeader(grid, minCols) {
   return grid.findIndex(
@@ -838,6 +946,9 @@ async function remote(url) {
   try {
     let rows = await parse(url);
     loadRows(rows, new URL(url).hostname);
+    let params = new URLSearchParams(location.search);
+    params.set("url", url);
+    history.replaceState(null, "", `?${params.toString()}`);
   } catch (error) {
     let blocked = error instanceof TypeError || /source blocked browser access/i.test(error.message),
       msg = blocked
@@ -880,6 +991,12 @@ el.datasetUrl.onkeydown = (e) => {
 };
 el.renderButton.onclick = render;
 el.exportPngButton.onclick = exportPng;
+el.exportSvgButton.onclick = exportSvg;
+el.resetButton.onclick = () => (location.href = location.pathname);
+el.cleanCurrency.onchange = applyCleaning;
+el.cleanParens.onchange = applyCleaning;
+el.cleanMissing.onchange = applyCleaning;
+el.cleanHideOther.onchange = applyCleaning;
 el.logScale.onchange = render;
 el.maxEntries.oninput = render;
 el.appShell.addEventListener("dragenter", (event) => {
@@ -917,3 +1034,8 @@ el.xColumn.onchange = () => {
   }
 };
 lucide.createIcons();
+let queryUrl = new URLSearchParams(location.search).get("url");
+if (queryUrl) {
+  el.datasetUrl.value = queryUrl;
+  remote(queryUrl);
+}

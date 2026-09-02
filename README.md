@@ -1,14 +1,15 @@
-# Open data visualiser
+Open Data Visualiser makes quick sense of messy public datasets. You paste a URL or drop in a file, and it outputs a usable chart without making you clean the data first.
 
-A minimum viable visualiser for open-source datasets.
+Public data is usually a mess. Files come in CSV, Excel, or JSON formats, packed with weird headers, mixed data types, and unexpected formatting. Open Data Visualiser skips the spreadsheet pre-cleaning step entirely.
 
-<img width="1198" height="650" alt="Screenshot 2026-08-30 at 2 28 49 pm" src="https://github.com/user-attachments/assets/70bff3d9-6305-4dac-b7d5-a46d9fb30a28" />
+### Core Capabilities
 
-## Why?
+* **Flexible Import:** Drop in a file, paste a link, or load a built-in demo dataset. If a site blocks direct links, the app retries through a CORS proxy to get the file anyway.
+* **Automatic Cleaning:** It strips currency symbols, handles negative numbers in parentheses, ignores top-row metadata, and cleans up broken column names on import.
+* **Smart Type Detection:** Each column is scanned and categorized as a number, date, category, boolean, text, or unknown.
+* **Auto-Charting:** The app picks a chart based on the data structure. You get line charts for time series, scatter plots for paired metrics, and bar or doughnut charts for categories.
+* **Manual Overrides:** If the automatic pick misses, you can manually switch chart types, change axes, select metrics, toggle log scales, or reassign column types.
+* **Data Preview:** A quick summary shows row counts, detected column types, and a preview of the raw input before you work with the chart.
+* **Image Export:** Save finished charts as PNG or SVG files for reports and slides.
 
-We love open-source data. But publishing open data is hard for Government and non-profit orgs. They face a a range of constraints: funding, time, bang-for-buck. That means open data is often published with as low effort as possible: CSV and Excel files are uploaded with limited descriptions, no view of schemas, samples or the shape of the data.
-
-
-## What it does
-
-ODV gives you a small snapshot of data without downloading it. Paste a URL to get a quick Chart.js view, with ODV making a best guess at how to display the data.
+The app handles the messy middle of open data. It lets you check file quality, spot basic trends, and pull out useful visuals in seconds without opening a spreadsheet or writing a script.

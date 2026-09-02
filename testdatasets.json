@@ -100,5 +100,12 @@
     "type": "url",
     "url": "https://data.gov.au/data/dataset/977e1354-3be9-47a4-a3e4-1020a6f4882a/resource/7e08bcc8-d3a0-403b-bac7-936ec4d48694/download/ndis-commission-compliance-actions-03.08.2026.csv",
     "notes": "Only numeric columns are ABN and Postcode (both id-like); guess() should fall back to a count-of-rows bar chart rather than charting ABN/Postcode as a metric."
+  },
+  {
+    "name": "NSW Public Schools Canteen Licensed Revenue 2025 (CSV)",
+    "type": "url",
+    "url": "https://data.nsw.gov.au/data/dataset/f307a2d6-7fcf-4479-9692-1ffc47c709ee/resource/6f02f5cf-d288-4e6c-bb1b-13b916feb2dd/download/nsw-public-schools-revenue-from-licensed-canteens-by-school-2025.csv",
+    "notes": "Highly skewed categorical grouping where the truncated 'Other' bucket dwarfs the top N schools; exercises the 'Hide Other bucket' cleaning toggle."
   }
 ]
+
