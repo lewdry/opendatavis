@@ -1,0 +1,212 @@
+[
+  {
+    "name": "Simple tidy CSV",
+    "type": "inline",
+    "format": "csv",
+    "content": "a,b,c\n1,2,3\n4,5,6\n",
+    "notes": "Baseline sanity check."
+  },
+  {
+    "name": "CSV with BOM",
+    "type": "inline",
+    "format": "csv",
+    "content": "\uFEFFname,value\nfoo,1\nbar,2\n",
+    "notes": "Leading byte-order-mark should not break header detection."
+  },
+  {
+    "name": "CSV with quoted commas and embedded newlines",
+    "type": "inline",
+    "format": "csv",
+    "content": "name,note\n\"Smith, John\",\"line1\nline2\"\n\"Doe, Jane\",\"normal\"\n",
+    "notes": "Tests PapaParse quoting/escaping."
+  },
+  {
+    "name": "Semicolon-delimited CSV",
+    "type": "inline",
+    "format": "csv",
+    "content": "a;b;c\n1;2;3\n4;5;6\n",
+    "notes": "Non-comma delimiter should auto-detect."
+  },
+  {
+    "name": "Single-column CSV",
+    "type": "inline",
+    "format": "csv",
+    "content": "name\nfoo\nbar\nbaz\n",
+    "notes": "Previously rejected as 0 rows; findHeader() fallback to minCols=1 fixes this."
+  },
+  {
+    "name": "Single-column CSV with title row",
+    "type": "inline",
+    "format": "csv",
+    "content": "My Dataset Export\n\nname\nfoo\nbar\nbaz\n",
+    "notes": "Checks the title row above a single-column header is skipped correctly."
+  },
+  {
+    "name": "Duplicate header names",
+    "type": "inline",
+    "format": "csv",
+    "content": "name,name,value\nfoo,bar,1\nbaz,qux,2\n",
+    "notes": "Later duplicate column silently wins (known minor limitation, not fixed)."
+  },
+  {
+    "name": "Headerless numeric-only CSV",
+    "type": "inline",
+    "format": "csv",
+    "content": "1,2,3\n4,5,6\n7,8,9\n",
+    "notes": "First row is ambiguously treated as a header; known limitation."
+  },
+  {
+    "name": "Ragged CSV (inconsistent column counts)",
+    "type": "inline",
+    "format": "csv",
+    "content": "a,b,c\n1,2\n4,5,6,7\n",
+    "notes": "Missing/extra cells are dropped rather than crashing."
+  },
+  {
+    "name": "Empty CSV file",
+    "type": "inline",
+    "format": "csv",
+    "content": "",
+    "notes": "PapaParse throws a delimiter-detection error; surfaced as an import error, not a crash."
+  },
+  {
+    "name": "All-blank-rows CSV",
+    "type": "inline",
+    "format": "csv",
+    "content": "a,b\n,\n,\n",
+    "notes": "Produces 0 usable rows; loadRows() throws a clean 'no rows found' error."
+  },
+  {
+    "name": "Wide-format CSV (years as columns)",
+    "type": "inline",
+    "format": "csv",
+    "content": "Agency,2021,2022,2023,2024\nHealth,100,120,130,140\nEducation,90,95,100,110\nTransport,50,55,60,65\n",
+    "notes": "Auto-unpivots via pivotWide() into period/Health/Education/Transport and plots as a multi-line chart."
+  },
+  {
+    "name": "CSV with a trailing Total row",
+    "type": "inline",
+    "format": "csv",
+    "content": "city,pop\nA,10\nB,20\nC,15\nTotal,45\n",
+    "notes": "Summary row is stripped before schema/guess so it doesn't skew stats or dominate the chart."
+  },
+  {
+    "name": "CSV with a Grand Total row",
+    "type": "inline",
+    "format": "csv",
+    "content": "city,pop\nA,10\nB,20\nGrand Total,30\n",
+    "notes": "Wider summary() regex catches 'Grand Total' as well as 'Total'."
+  },
+  {
+    "name": "High-cardinality categorical CSV (25 suburbs)",
+    "type": "inline",
+    "format": "csv",
+    "generator": "suburb rows numbered 0-24 with descending population values",
+    "notes": "truncateAggregate() collapses this to top 10 + an 'Other' bar for bar/doughnut/treemap charts."
+  },
+  {
+    "name": "Long-label categorical CSV (government department names)",
+    "type": "inline",
+    "format": "csv",
+    "content": "dept,budget\n\"Department of Climate Change, Energy, the Environment and Water\",500\n\"Department of Health and Aged Care\",800\n\"Department of Education\",300\n\"Attorney-Generals Department\",200\n",
+    "notes": "Labels longer than 15 characters trigger the horizontal bar (indexAxis:'y') auto-switch."
+  },
+  {
+    "name": "ID + numeric metric columns",
+    "type": "inline",
+    "format": "csv",
+    "content": "ID,City,Budget\n1,A,100\n2,B,200\n3,C,150\n4,D,300\n5,E,90\n6,F,120\n7,G,80\n",
+    "notes": "guess()/pickMetric() should avoid defaulting to the ID column as a plotted axis or metric."
+  },
+  {
+    "name": "JSON array of objects",
+    "type": "inline",
+    "format": "json",
+    "content": "[{\"a\":1,\"b\":2},{\"a\":3,\"b\":4}]",
+    "notes": "Baseline JSON ingestion."
+  },
+  {
+    "name": "JSON { data: [...] } wrapper",
+    "type": "inline",
+    "format": "json",
+    "content": "{\"data\":[{\"a\":1},{\"a\":2}]}",
+    "notes": "Supported alternate top-level shape."
+  },
+  {
+    "name": "JSON with nested objects",
+    "type": "inline",
+    "format": "json",
+    "content": "[{\"a\":1,\"loc\":{\"lat\":1.1,\"lng\":2.2}},{\"a\":2,\"loc\":{\"lat\":3.3,\"lng\":4.4}}]",
+    "notes": "flatten() expands loc into loc_lat/loc_lng."
+  },
+  {
+    "name": "JSON array of arrays",
+    "type": "inline",
+    "format": "json",
+    "content": "[[1,2,3],[4,5,6]]",
+    "notes": "Treated as numerically-indexed columns (0,1,2); renders as a scatter chart."
+  },
+  {
+    "name": "Malformed JSON",
+    "type": "inline",
+    "format": "json",
+    "content": "{a:1,]",
+    "notes": "JSON.parse throws a clear syntax error surfaced to the user."
+  },
+  {
+    "name": "JSON single object (not an array)",
+    "type": "inline",
+    "format": "json",
+    "content": "{\"a\":1,\"b\":2}",
+    "notes": "Rejected with 'JSON must be an array or a { data: [] } object.'"
+  },
+  {
+    "name": "JSON array of primitives",
+    "type": "inline",
+    "format": "json",
+    "content": "[1,2,3,4]",
+    "notes": "flatten() strips primitives to empty objects; loadRows() throws 'no rows found' cleanly."
+  },
+  {
+    "name": "JSON empty array",
+    "type": "inline",
+    "format": "json",
+    "content": "[]",
+    "notes": "Zero rows; handled without crashing."
+  },
+  {
+    "name": "JSON with null values",
+    "type": "inline",
+    "format": "json",
+    "content": "[{\"a\":1,\"b\":null},{\"a\":null,\"b\":2}]",
+    "notes": "blank() treats null as missing for schema/aggregation purposes."
+  },
+  {
+    "name": "JSON with an array-valued field",
+    "type": "inline",
+    "format": "json",
+    "content": "[{\"a\":1,\"tags\":[\"x\",\"y\"]},{\"a\":2,\"tags\":[\"z\"]}]",
+    "notes": "Array fields are left intact (not flattened) and rendered via String() coercion; quirky but non-crashing."
+  },
+  {
+    "name": "num() parsing edge cases",
+    "type": "reference",
+    "values": [
+      "00251",
+      "007",
+      "0123",
+      "$1,234.56",
+      "12%",
+      "1.5e10",
+      "-42",
+      "NaN",
+      "Infinity",
+      "  42  ",
+      "1,000,000",
+      "(500)",
+      "3.14.15",
+      "١٢٣"
+    ],
+    "notes": "Leading-zero strings like postcodes (e.g. '00251') numerically parse to 251, losing the leading zero. Known display quirk, not fixed."
+  }
+]

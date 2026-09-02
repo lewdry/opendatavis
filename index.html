@@ -19,7 +19,7 @@
             <span class="mark"><i data-lucide="chart-no-axes-combined"></i></span>Open data visualiser
           </div>
           <p class="lede">
-            Paste a public dataset URL. Peek at the data and see a useful starting chart.
+            Paste a public dataset URL, see the data and a useful starting chart.
           </p>
         </div>
         <div class="status" id="status" role="status">WAITING FOR DATA</div>
@@ -45,8 +45,10 @@
         <div class="demos" aria-label="Sample datasets">
           <span>Try a sample</span>
           <button class="demo" type="button" data-demo="nsw_population">NSW Population</button>
-          <button class="demo" type="button" data-demo="global_temp_anomaly">Global Temperatures</button>
+          <button class="demo" type="button" data-demo="temp_variance">Temp Variance</button>
           <button class="demo" type="button" data-demo="council_expenditure_2024">City Budgets</button>
+          <button class="demo" type="button" data-demo="commodity_exports">Commodity Exports</button>
+          <button class="demo" type="button" data-demo="penguin_measurements">Penguin Measurements</button>
         </div>
         <p class="hint">Supports CSV, TXT, XLSX, and JSON. Trimmed to the first 1,000 rows.</p>
       </section>
@@ -56,11 +58,10 @@
             <span>Visualisation</span>
             <div class="exports" id="exports" hidden>
               <button id="exportPngButton" class="icon-button" type="button" title="Export PNG" aria-label="Export PNG"><i data-lucide="image-down"></i></button>
-              <button id="exportSvgButton" class="icon-button" type="button" title="Export SVG" aria-label="Export SVG"><i data-lucide="file-down"></i></button>
             </div>
           </div>
           <div class="toolbar">
-            <div class="control">
+            <div class="control" id="chartTypeControl">
               <label for="chartType">Chart type</label
               ><select id="chartType" disabled>
                 <option value="bar">Bar</option>
@@ -70,18 +71,30 @@
                 <option value="scatter">Scatter</option>
               </select>
             </div>
-            <div class="control">
+            <div class="control" id="xColumnControl">
               <label for="xColumn">X axis / group</label
               ><select id="xColumn" disabled></select>
             </div>
-            <div class="control">
+            <div class="control" id="yColumnControl">
               <label for="yColumn">Y axis / metric</label
-              ><select id="yColumn" multiple size="4" disabled></select
+              ><select id="yColumn" multiple size="3" disabled></select
               ><span class="micro">Cmd/Ctrl-click to compare series</span>
             </div>
-            <button id="renderButton" type="button" disabled title="Apply chart settings">
-              <i data-lucide="refresh-cw"></i>Render
-            </button>
+            <div class="control" id="maxEntriesControl">
+              <label for="maxEntries">Show top N</label
+              ><input type="range" id="maxEntries" min="5" max="50" value="10" disabled
+              /><span class="micro" id="maxEntriesValue">All groups</span>
+            </div>
+            <div class="control" id="logScaleControl">
+              <label class="checkbox-label" for="logScale"
+                ><input type="checkbox" id="logScale" disabled /> Log scale (Y)</label
+              ><span class="micro" id="logScaleHint">Needs a positive-only metric</span>
+            </div>
+            <div class="control" id="renderControl">
+              <button id="renderButton" type="button" disabled title="Apply chart settings">
+                <i data-lucide="refresh-cw"></i>Render
+              </button>
+            </div>
           </div>
           <div class="chart-area" id="chartArea">
             <div class="empty">
@@ -118,6 +131,7 @@
         </section>
       </div>
     </main>
+    <script src="demos.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

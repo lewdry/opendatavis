@@ -21,10 +21,6 @@ body {
   margin: 0;
   min-width: 320px;
   background-color: var(--bg);
-  background-image:
-    linear-gradient(#93a1a117 1px, transparent 1px),
-    linear-gradient(90deg, #93a1a117 1px, transparent 1px);
-  background-size: 24px 24px;
   color: var(--text);
   font-family: SFMono-Regular, Consolas, "Liberation Mono", monospace;
 }
@@ -303,17 +299,74 @@ h2 {
 }
 .toolbar {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
-  gap: 12px;
+  grid-template-columns: minmax(140px, 190px) minmax(160px, 1fr) minmax(220px, 1.4fr);
+  grid-template-areas:
+    "type   x     y"
+    "maxn   log   render";
+  gap: 10px 16px;
   align-items: end;
   padding-bottom: 15px;
   border-bottom: 1px solid var(--line);
+}
+#chartTypeControl {
+  grid-area: type;
+}
+#xColumnControl {
+  grid-area: x;
+}
+#yColumnControl {
+  grid-area: y;
+}
+#maxEntriesControl {
+  grid-area: maxn;
+}
+#logScaleControl {
+  grid-area: log;
+}
+#renderControl {
+  grid-area: render;
 }
 .control label {
   margin-bottom: 6px;
 }
 .control select {
   min-height: 35px;
+}
+#yColumn {
+  overflow-y: scroll;
+}
+#yColumn::-webkit-scrollbar {
+  width: 10px;
+}
+#yColumn::-webkit-scrollbar-track {
+  background: transparent;
+}
+#yColumn::-webkit-scrollbar-thumb {
+  background: #b9b09a;
+}
+.control input[type="range"] {
+  width: 100%;
+}
+.control .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 35px;
+  margin-bottom: 0 !important;
+}
+.checkbox-label input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: var(--blue);
+}
+.checkbox-label:has(input:disabled) {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+#renderControl button {
+  width: 100%;
 }
 .micro {
   display: block;
@@ -379,9 +432,11 @@ canvas {
   }
   .toolbar {
     grid-template-columns: 1fr 1fr;
-  }
-  .toolbar button {
-    grid-column: 1/-1;
+    grid-template-areas:
+      "type x"
+      "y y"
+      "maxn log"
+      "render render";
   }
 }
 @media (max-width: 560px) {
@@ -404,6 +459,13 @@ canvas {
   }
   .toolbar {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "type"
+      "x"
+      "y"
+      "maxn"
+      "log"
+      "render";
   }
   .chart-area {
     height: 360px;

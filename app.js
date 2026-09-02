@@ -19,29 +19,6 @@ Chart.defaults.plugins.tooltip.backgroundColor = "#eee8d5";
 Chart.defaults.plugins.tooltip.titleColor = "#586e75";
 Chart.defaults.plugins.tooltip.bodyColor = "#586e75";
 const state = { rows: [], columns: [], chart: null, source: "Awaiting source", colorOffset: 0 };
-const DEMOS = {
-  nsw_population: [
-    { year: 2020, population: 8168241 },
-    { year: 2021, population: 8163901 },
-    { year: 2022, population: 8206900 },
-    { year: 2023, population: 8339700 },
-    { year: 2024, population: 8482400 },
-  ],
-  global_temp_anomaly: [
-    { year: 2019, anomaly_c: 0.98 },
-    { year: 2020, anomaly_c: 1.02 },
-    { year: 2021, anomaly_c: 0.85 },
-    { year: 2022, anomaly_c: 0.89 },
-    { year: 2023, anomaly_c: 1.17 },
-    { year: 2024, anomaly_c: 1.28 },
-  ],
-  council_expenditure_2024: [
-    { city: "Brisbane", operating_expenditure_m: 3582 },
-    { city: "Sydney", operating_expenditure_m: 681 },
-    { city: "Melbourne", operating_expenditure_m: 638 },
-    { city: "Perth", operating_expenditure_m: 247 },
-  ],
-};
 const $ = (id) => document.getElementById(id);
 const chartColor = (index = 0) => PALETTE[(state.colorOffset + index) % PALETTE.length];
 const chartPalette = () => PALETTE.map((_, index) => chartColor(index));
@@ -60,20 +37,34 @@ const el = Object.fromEntries(
     "chartType",
     "xColumn",
     "yColumn",
+    "maxEntries",
+    "maxEntriesValue",
+    "logScale",
+    "logScaleHint",
     "renderButton",
     "chartArea",
     "appShell",
     "exports",
     "exportPngButton",
-    "exportSvgButton",
   ].map((id) => [id, $(id)]),
 );
 const blank = (v) =>
   v === null ||
   v === undefined ||
-  ["", "blank", "empty", "(blank)", "(empty)", "null", "n/a", "na", "undefined"].includes(
-    String(v).trim().toLowerCase(),
-  );
+  [
+    "",
+    "blank",
+    "empty",
+    "(blank)",
+    "(empty)",
+    "null",
+    "n/a",
+    "na",
+    "undefined",
+    "nil",
+    "none",
+    "not applicable",
+  ].includes(String(v).trim().toLowerCase());
 const num = (v) => {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (v instanceof Date) return null;
@@ -234,6 +225,7 @@ function opt(label, value, selected) {
   o.textContent = label;
   o.value = value;
   o.selected = selected;
+  o.title = label;
   return o;
 }
 function controls(config) {
@@ -281,7 +273,7 @@ function calendarOrder(entries, x) {
   return dateColumn || dates.every((value) => value !== null) ? dates : null;
 }
 const summary = (value) =>
-  /^(other|total|grand total|all|sum|average|mean)$/i.test(String(value).trim());
+  /^(other|total|grand total|all|sum|average|mean)\b/i.test(String(value).trim());
 function aggregate(x, y) {
   let map = new Map();
   for (let row of state.rows) {
@@ -304,8 +296,12 @@ function aggregate(x, y) {
 }
 function options(x, y, legend = false, radial = false) {
   let postcode = /(post\s*code|zip)/i.test(x),
-    xTicks = { maxRotation: 45, minRotation: 0 };
+    xTicks = { maxRotation: 45, minRotation: 0 },
+    log = !radial && el.logScale.checked,
+    yScale = { title: { display: true, text: y }, grid: { color: "#e3dcc8" } };
   if (postcode) xTicks.callback = (value) => String(value);
+  if (log) yScale.type = "logarithmic";
+  else yScale.beginAtZero = true;
   return {
     responsive: true,
     maintainAspectRatio: false,
@@ -321,7 +317,7 @@ function options(x, y, legend = false, radial = false) {
       ? {}
       : {
           x: { title: { display: true, text: x }, grid: { color: "#e3dcc8" }, ticks: xTicks },
-          y: { title: { display: true, text: y }, beginAtZero: true, grid: { color: "#e3dcc8" } },
+          y: yScale,
         },
   };
 }
@@ -330,6 +326,44 @@ function truncateAggregate(entries, maxItems = 10) {
   let top = entries.slice(0, maxItems),
     restSum = entries.slice(maxItems).reduce((acc, [, value]) => acc + value, 0);
   return [...top, ["Other", restSum]];
+}
+function groupCount(x) {
+  return new Set(
+    state.rows
+      .map((row) => row[x])
+      .filter((v) => !blank(v) && !summary(v))
+      .map(show),
+  ).size;
+}
+// Enables/refreshes the "Show top N" and "Log scale" controls for the current selection.
+function syncViewOptions(x, ys, type, grouped) {
+  let count = grouped ? groupCount(x) : 0,
+    key = `${x}:${type}`;
+  el.maxEntries.disabled = !grouped || count <= 5;
+  if (grouped && count > 5 && el.maxEntries.dataset.key !== key) {
+    el.maxEntries.min = 5;
+    el.maxEntries.max = count;
+    el.maxEntries.value = Math.min(count, 10);
+    el.maxEntries.dataset.key = key;
+  }
+  el.maxEntriesValue.textContent = el.maxEntries.disabled
+    ? "All groups"
+    : `Top ${el.maxEntries.value} of ${count}`;
+  let y = ys.find((k) => k !== "__count__"),
+    values = y ? state.rows.map((row) => num(row[y])).filter((v) => v !== null) : [],
+    chartSupportsLog = type === "bar" || type === "line" || type === "scatter",
+    hasPositiveMetric = values.length > 0 && values.every((v) => v > 0),
+    canLog = chartSupportsLog && hasPositiveMetric;
+  el.logScale.disabled = !canLog;
+  if (!canLog) el.logScale.checked = false;
+  el.logScaleHint.textContent = canLog
+    ? "Rescales the Y axis to compare small and large values"
+    : !chartSupportsLog
+      ? `Not available for ${type} charts`
+      : !y
+        ? "Select a numeric Y metric to enable"
+        : "Needs a metric with only positive values";
+  el.logScale.title = el.logScaleHint.textContent;
 }
 function multiSeries(x, ys) {
   let maps = ys.map((y) => new Map(aggregate(x, y))),
@@ -385,8 +419,11 @@ function render() {
   let type = el.chartType.value,
     x = el.xColumn.value,
     ys = selectedY(),
-    xType = state.columns.find((column) => column.key === x)?.type;
+    xType = state.columns.find((column) => column.key === x)?.type,
+    grouped = type !== "scatter" && xType !== "datetime" && xType !== "numeric";
   if (!x || !ys.length || !state.rows.length) return;
+  syncViewOptions(x, ys, type, grouped);
+  let limit = el.maxEntries.disabled ? Infinity : Number(el.maxEntries.value);
   if (state.chart) {
     state.chart.destroy();
     state.chart = null;
@@ -417,7 +454,8 @@ function render() {
     config = options(x, y);
   } else if (type === "treemap") {
     let y = ys[0],
-      entries = truncateAggregate(aggregate(x, y));
+      yLabel = y === "__count__" ? "Count of rows" : y,
+      entries = truncateAggregate(aggregate(x, y), limit);
     if (!entries.length) {
       chartMessage(
         "No chartable data",
@@ -442,6 +480,14 @@ function render() {
           borderWidth: 1,
           borderColor: "#fdf6e3",
           backgroundColor: (context) => chartColor(context.dataIndex),
+          labels: {
+            display: true,
+            align: "center",
+            position: "middle",
+            color: "#fdf6e3",
+            font: { weight: "bold" },
+            formatter: (context) => [context.raw.g, context.raw.v.toLocaleString()],
+          },
         },
       ],
     };
@@ -449,13 +495,16 @@ function render() {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
+        title: { display: true, text: `${yLabel} by ${x}`, color: "#586e75", font: { size: 13, weight: "normal" } },
         legend: { display: false },
-        tooltip: { callbacks: { label: (context) => `${context.raw.g}: ${context.raw.v}` } },
+        tooltip: {
+          callbacks: { label: (context) => `${context.raw.g}: ${context.raw.v.toLocaleString()} (${yLabel})` },
+        },
       },
     };
   } else if (type === "doughnut") {
     let y = ys[0],
-      entries = truncateAggregate(aggregate(x, y));
+      entries = truncateAggregate(aggregate(x, y), limit);
     if (!entries.length) {
       chartMessage(
         "No chartable data",
@@ -488,7 +537,7 @@ function render() {
       labels,
       maps;
     if (!multi && type === "bar" && xType !== "datetime") {
-      let entries = truncateAggregate(aggregate(x, ys[0]));
+      let entries = truncateAggregate(aggregate(x, ys[0]), limit);
       if (!entries.length) {
         chartMessage(
           "No chartable data",
@@ -515,6 +564,7 @@ function render() {
       config = options(x, ys[0] === "__count__" ? "Count of rows" : ys[0], false);
     } else {
       ({ labels, maps } = multiSeries(x, ys));
+      if (grouped && limit < labels.length) labels = labels.slice(0, limit);
       if (!labels.length) {
         chartMessage(
           "No chartable data",
@@ -579,7 +629,7 @@ function display() {
   el.previewState.textContent = "First 4 rows";
   lucide.createIcons();
 }
-function loadRows(rows, source) {
+function loadRows(rows, source, configOverride) {
   let base = rows
       .slice(0, LIMIT)
       .map(flatten)
@@ -592,7 +642,7 @@ function loadRows(rows, source) {
   state.source = source;
   state.colorOffset = Math.floor(Math.random() * PALETTE.length);
   state.columns = schema(state.rows);
-  let config = guess(state.columns);
+  let config = { ...guess(state.columns), ...configOverride };
   controls(config);
   display();
   render();
@@ -605,12 +655,6 @@ function download(name, url) {
 }
 function exportPng() {
   if (state.chart) download("odv-chart.png", state.chart.toBase64Image());
-}
-function exportSvg() {
-  let canvas = el.chartArea.querySelector("canvas");
-  if (!canvas) return;
-  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${canvas.width}" height="${canvas.height}"><image href="${canvas.toDataURL("image/png")}" width="100%" height="100%"/></svg>`;
-  download("odv-chart.svg", URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" })));
 }
 function findHeader(grid, minCols) {
   return grid.findIndex(
@@ -828,14 +872,16 @@ el.loadButton.onclick = () => remote(el.datasetUrl.value.trim());
 el.uploadButton.onclick = () => el.fileInput.click();
 el.fileInput.onchange = (event) => upload(event.currentTarget.files[0]);
 document.querySelectorAll("[data-demo]").forEach((button) => {
-  button.onclick = () => loadRows(DEMOS[button.dataset.demo], button.textContent);
+  button.onclick = () =>
+    loadRows(DEMOS[button.dataset.demo], button.textContent, DEMO_CONFIG_OVERRIDES[button.dataset.demo]);
 });
 el.datasetUrl.onkeydown = (e) => {
   if (e.key === "Enter") remote(e.currentTarget.value.trim());
 };
 el.renderButton.onclick = render;
 el.exportPngButton.onclick = exportPng;
-el.exportSvgButton.onclick = exportSvg;
+el.logScale.onchange = render;
+el.maxEntries.oninput = render;
 el.appShell.addEventListener("dragenter", (event) => {
   if ([...event.dataTransfer.types].includes("Files")) el.appShell.classList.add("dragging");
 });
