@@ -2,6 +2,8 @@ Open Data Visualiser makes quick sense of messy public datasets. You paste a URL
 
 Public data is usually a mess. Files come in CSV, Excel, or JSON formats, packed with weird headers, mixed data types, and unexpected formatting. Open Data Visualiser skips the spreadsheet pre-cleaning step entirely.
 
+<img width="1087" height="880" alt="Screenshot 2026-09-02 at 8 40 07 pm" src="https://github.com/user-attachments/assets/50e36847-0790-4a31-ad96-d74370e3ee6c" />
+
 ### Core Capabilities
 
 * **Flexible Import:** Drop in a file, paste a link, or load a built-in demo dataset. If a site blocks direct links, the app retries through a CORS proxy to get the file anyway.
@@ -13,3 +15,7 @@ Public data is usually a mess. Files come in CSV, Excel, or JSON formats, packed
 * **Image Export:** Save finished charts as PNG or SVG files for reports and slides.
 
 The app handles the messy middle of open data. It lets you check file quality, spot basic trends, and pull out useful visuals in seconds without opening a spreadsheet or writing a script.
+
+<img width="1087" height="880" alt="Screenshot 2026-09-02 at 8 40 26 pm" src="https://github.com/user-attachments/assets/db103c07-27e8-45bc-aea4-289fc6ce68ab" />
+
+<img width="1087" height="880" alt="Screenshot 2026-09-02 at 8 40 47 pm" src="https://github.com/user-attachments/assets/18772544-7c0a-4a12-82c3-7b6dbfaf242e" />
