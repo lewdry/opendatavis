@@ -23,6 +23,7 @@ const state = {
   columns: [],
   chart: null,
   source: "Awaiting source",
+  sourceTotal: 0,
   colorOffset: 0,
   typeOverrides: {},
   cleaning: { stripCurrency: true, parenNegative: true, filterMissing: true, hideOther: true },
@@ -83,6 +84,7 @@ const el = Object.fromEntries(
     "uploadButton",
     "loadButton",
     "status",
+    "urlError",
     "rowCount",
     "columnList",
     "metadata",
@@ -93,6 +95,13 @@ const el = Object.fromEntries(
     "xColumnLabel",
     "yColumn",
     "yColumnLabel",
+    "yColumnMultiselect",
+    "yColumnTrigger",
+    "yColumnTags",
+    "yColumnDropdown",
+    "yColumnSearch",
+    "yColumnOptions",
+    "yColumnHint",
     "maxEntries",
     "maxEntriesValue",
     "logScale",
@@ -194,6 +203,7 @@ const date = (v) => {
 const show = (v) =>
   blank(v) ? "(empty)" : v instanceof Date ? v.toISOString().split("T")[0] : String(v);
 function status(message, warning = false) {
+  if (!el.status) return;
   el.status.textContent = message;
   el.status.classList.toggle("warning", warning);
 }
@@ -223,9 +233,22 @@ function schema(rows) {
               ? "numeric"
               : unique.size / values.length > 0.8
                 ? "text"
-                : "categorical";
-    return { key, type, unique: unique.size, nulls: rows.length - values.length };
+                : "categorical",
+      range = null;
+    if (type === "datetime") {
+      let times = values.map((v) => date(v)?.getTime()).filter((t) => t !== undefined && !Number.isNaN(t));
+      if (times.length) range = { min: new Date(Math.min(...times)), max: new Date(Math.max(...times)) };
+    }
+    return { key, type, unique: unique.size, nulls: rows.length - values.length, range };
   });
+}
+// Formats a datetime column's min/max as a compact range, collapsing to bare years
+// when every value falls on Jan 1 (annual data) rather than showing redundant dates.
+function formatDateRange({ min, max }) {
+  let annual = [min, max].every((d) => d.getUTCMonth() === 0 && d.getUTCDate() === 1);
+  if (annual) return `${min.getUTCFullYear()} – ${max.getUTCFullYear()}`;
+  let fmt = (d) => d.toISOString().split("T")[0];
+  return `${fmt(min)} – ${fmt(max)}`;
 }
 const idLike = (key) =>
   /^(id|year|code|index|abn|acn|postcode|zip|zip\s*code|phone|fax|rank|ranking|row|row_num|gid|gisid|objectid)$/i.test(
@@ -310,6 +333,137 @@ function controls(config) {
   );
   el.chartType.value = config.type;
   [el.chartType, el.xColumn, el.yColumn, el.renderButton].forEach((x) => (x.disabled = false));
+  buildYMultiselect();
+}
+function buildYMultiselect() {
+  if (el.yColumnMultiselect) {
+    el.yColumnMultiselect.classList.remove("disabled");
+  }
+  syncYMultiselectUI();
+}
+function syncYMultiselectUI() {
+  if (!el.yColumnMultiselect) return;
+  let isMulti = el.chartType.value === "bar" || el.chartType.value === "line";
+  let options = [...el.yColumn.options];
+  let selected = options.filter((o) => o.selected);
+
+  el.yColumnTags.replaceChildren();
+  if (!selected.length) {
+    let placeholder = document.createElement("span");
+    placeholder.className = "multiselect-placeholder";
+    placeholder.textContent = "Select metrics...";
+    el.yColumnTags.append(placeholder);
+  } else {
+    for (let o of selected) {
+      let tag = document.createElement("span");
+      tag.className = "multiselect-tag";
+      let name = document.createElement("span");
+      name.textContent = o.value === "__count__" ? "Count of rows" : o.value;
+      tag.append(name);
+      if (selected.length > 1 && isMulti) {
+        let removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "multiselect-tag-remove";
+        removeBtn.textContent = "×";
+        removeBtn.title = `Remove ${o.value}`;
+        removeBtn.onclick = (e) => {
+          e.stopPropagation();
+          o.selected = false;
+          syncYMultiselectUI();
+          render();
+        };
+        tag.append(removeBtn);
+      }
+      el.yColumnTags.append(tag);
+    }
+  }
+
+  let searchTerm = (el.yColumnSearch?.value || "").trim().toLowerCase();
+  el.yColumnOptions.replaceChildren();
+  let matches = 0;
+  for (let o of options) {
+    let text = o.text || o.value;
+    if (searchTerm && !text.toLowerCase().includes(searchTerm)) continue;
+    matches++;
+    let row = document.createElement("div");
+    row.className = `multiselect-option${o.selected ? " selected" : ""}`;
+    row.role = "option";
+    row.setAttribute("aria-selected", o.selected ? "true" : "false");
+
+    let labelWrap = document.createElement("div");
+    labelWrap.className = "multiselect-option-label";
+
+    let checkbox = document.createElement("input");
+    checkbox.type = isMulti ? "checkbox" : "radio";
+    checkbox.checked = o.selected;
+    checkbox.tabIndex = -1;
+
+    let textSpan = document.createElement("span");
+    textSpan.textContent = o.value === "__count__" ? "Count of rows" : o.value;
+
+    labelWrap.append(checkbox, textSpan);
+
+    let typeSpan = document.createElement("span");
+    typeSpan.className = "multiselect-option-type";
+    let colType = state.columns.find((c) => c.key === o.value)?.type || (o.value === "__count__" ? "count" : "");
+    typeSpan.textContent = colType;
+
+    row.append(labelWrap, typeSpan);
+
+    row.onclick = (e) => {
+      e.stopPropagation();
+      if (!isMulti) {
+        options.forEach((opt) => (opt.selected = false));
+        o.selected = true;
+        closeYMultiselect();
+      } else {
+        if (o.selected && selected.length === 1) {
+          return;
+        }
+        o.selected = !o.selected;
+      }
+      syncYMultiselectUI();
+      render();
+    };
+
+    el.yColumnOptions.append(row);
+  }
+
+  if (matches === 0) {
+    let empty = document.createElement("div");
+    empty.className = "multiselect-empty";
+    empty.textContent = "No matching metrics";
+    el.yColumnOptions.append(empty);
+  }
+
+  if (el.yColumnHint) {
+    el.yColumnHint.textContent = isMulti
+      ? "Select one or more metrics to compare"
+      : "Single metric required for this chart type";
+  }
+}
+function openYMultiselect() {
+  if (el.yColumnMultiselect.classList.contains("disabled")) return;
+  el.yColumnMultiselect.classList.add("open");
+  el.yColumnDropdown.hidden = false;
+  el.yColumnTrigger.setAttribute("aria-expanded", "true");
+  if (el.yColumnSearch) {
+    el.yColumnSearch.value = "";
+    syncYMultiselectUI();
+    el.yColumnSearch.focus();
+  }
+}
+function closeYMultiselect() {
+  el.yColumnMultiselect.classList.remove("open");
+  el.yColumnDropdown.hidden = true;
+  el.yColumnTrigger.setAttribute("aria-expanded", "false");
+}
+function toggleYMultiselect() {
+  if (el.yColumnMultiselect.classList.contains("open")) {
+    closeYMultiselect();
+  } else {
+    openYMultiselect();
+  }
 }
 const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
   MONTHS = [
@@ -460,7 +614,10 @@ function selectedY() {
   return [...el.yColumn.selectedOptions].map((o) => o.value);
 }
 function selectOnlyY(value) {
-  el.yColumn.value = value;
+  for (let o of el.yColumn.options) {
+    o.selected = o.value === value;
+  }
+  syncYMultiselectUI();
 }
 function selectScatterAxes() {
   if (!state.rows.length) {
@@ -687,7 +844,19 @@ function render() {
   );
 }
 function display() {
-  el.rowCount.textContent = `${state.rows.length.toLocaleString()} rows`;
+  let shown = state.rows.length,
+    total = state.sourceTotal,
+    sampled = total == null || total > LIMIT;
+  el.rowCount.textContent = sampled
+    ? total == null
+      ? `${shown.toLocaleString()} rows (sample)`
+      : `${shown.toLocaleString()} of ${total.toLocaleString()} rows`
+    : `${shown.toLocaleString()} rows`;
+  el.rowCount.title = sampled
+    ? total == null
+      ? `Loaded the first ${shown.toLocaleString()} rows; the source may contain more.`
+      : `Loaded the first ${shown.toLocaleString()} of ${total.toLocaleString()} total rows.`
+    : `All ${shown.toLocaleString()} rows loaded.`;
   el.columnList.replaceChildren(
     ...state.columns.map((c) => {
       let d = document.createElement("div");
@@ -703,14 +872,20 @@ function display() {
       select.title = "Override the detected column type";
       select.append(...OVERRIDE_TYPES.map((t) => opt(TYPE_LABELS[t], t, t === c.type)));
       select.onchange = () => setColumnType(c.key, select.value);
-      typeWrap.append(select, document.createTextNode(` · ${pct}%`));
+      let completeness = document.createElement("span");
+      completeness.className = `completeness ${pct >= 90 ? "good" : pct >= 50 ? "warn" : "bad"}`;
+      completeness.title = `${pct}% complete · ${c.nulls.toLocaleString()} missing of ${state.rows.length.toLocaleString()}`;
+      completeness.innerHTML = `<span class="completeness-bar"><span class="completeness-fill" style="width:${pct}%"></span></span><span class="completeness-pct">${pct}%</span>`;
+      typeWrap.append(select, completeness);
+      if (c.type === "datetime" && c.range)
+        typeWrap.append(document.createTextNode(` · ${formatDateRange(c.range)}`));
       d.append(typeWrap);
       return d;
     }),
   );
   el.metadata.innerHTML = `<span><i data-lucide="table-properties"></i>${state.source}</span><span><i data-lucide="columns-3"></i>${state.columns.length} columns</span>`;
-  el.preview.textContent = JSON.stringify(state.rows.slice(0, 4), null, 2);
-  el.previewState.textContent = "First 4 rows";
+  el.preview.textContent = JSON.stringify(state.rows.slice(0, 10), null, 2);
+  el.previewState.textContent = "First 10 rows";
   lucide.createIcons();
 }
 function applyTypeOverrides() {
@@ -750,7 +925,7 @@ function applyCleaning() {
   applyTypeOverrides();
   refreshAfterSchemaChange();
 }
-function loadRows(rows, source, configOverride) {
+function loadRows(rows, source, configOverride, sourceTotal = rows.length) {
   let base = rows
       .slice(0, LIMIT)
       .map(flatten)
@@ -760,7 +935,9 @@ function loadRows(rows, source, configOverride) {
     );
   state.rows = filtered.length ? filtered : base;
   if (!state.rows.length) throw Error("No tabular rows were found in this file.");
+  el.urlError.hidden = true;
   state.source = source;
+  state.sourceTotal = sourceTotal;
   state.colorOffset = Math.floor(Math.random() * PALETTE.length);
   state.typeOverrides = {};
   state.columns = schema(state.rows);
@@ -952,8 +1129,9 @@ async function parse(source) {
   }
   if (xlsxLike) {
     let wb = XLSX.read(await response.arrayBuffer(), { type: "array", cellDates: true }),
-      sheets = wb.SheetNames.map((name) => worksheetRows(wb.Sheets[name]));
-    return (sheets.sort((first, second) => second.length - first.length)[0] || []).slice(0, LIMIT);
+      sheets = wb.SheetNames.map((name) => worksheetRows(wb.Sheets[name])),
+      chosen = sheets.sort((first, second) => second.length - first.length)[0] || [];
+    return { rows: chosen.slice(0, LIMIT), total: chosen.length };
   }
   let text = await response.text();
   if (/^\s*(?:<!doctype\s+html|<html[\s>])/i.test(text))
@@ -961,10 +1139,11 @@ async function parse(source) {
       "This URL returned a web page, not a dataset file. Use the portal's CSV/XLSX download link instead.",
     );
   if (/\.json$/.test(path)) {
-    let json = JSON.parse(text);
-    if (Array.isArray(json)) return json;
-    if (Array.isArray(json.data)) return json.data;
-    throw Error("JSON must be an array or a { data: [] } object.");
+    let json = JSON.parse(text), data;
+    if (Array.isArray(json)) data = json;
+    else if (Array.isArray(json.data)) data = json.data;
+    else throw Error("JSON must be an array or a { data: [] } object.");
+    return { rows: data.slice(0, LIMIT), total: data.length };
   }
   let result = Papa.parse(text, {
     dynamicTyping: true,
@@ -972,18 +1151,25 @@ async function parse(source) {
     preview: LIMIT + 20,
   });
   if (result.errors.length && !result.data.length) throw Error(result.errors[0].message);
-  return csvRows(result.data);
+  // Papa's preview cap means we can only know the true row count when it read
+  // fewer raw rows than the cap; otherwise more rows likely exist beyond it.
+  let hitCap = result.data.length >= LIMIT + 20,
+    rows = csvRows(result.data);
+  return { rows, total: hitCap ? null : rows.length };
 }
 async function remote(url) {
+  el.urlError.hidden = true;
   if (!url) {
     status("ENTER A DATASET URL", true);
+    el.urlError.textContent = "Enter a dataset URL first.";
+    el.urlError.hidden = false;
     return;
   }
   status("FETCHING DATA...");
   el.loadButton.disabled = true;
   try {
-    let rows = await parse(url);
-    loadRows(rows, new URL(url).hostname);
+    let { rows, total } = await parse(url);
+    loadRows(rows, new URL(url).hostname, undefined, total);
     let params = new URLSearchParams(location.search);
     params.set("url", url);
     history.replaceState(null, "", `?${params.toString()}`);
@@ -997,6 +1183,8 @@ async function remote(url) {
     el.preview.textContent = msg;
     el.previewState.textContent = blocked ? "CORS / network blocked" : "Check dataset format";
     el.previewState.classList.add("warning");
+    el.urlError.textContent = msg;
+    el.urlError.hidden = false;
   } finally {
     el.loadButton.disabled = false;
   }
@@ -1006,7 +1194,8 @@ async function upload(file) {
   status("READING FILE...");
   el.uploadButton.disabled = true;
   try {
-    loadRows(await parse(file), file.name);
+    let { rows, total } = await parse(file);
+    loadRows(rows, file.name, undefined, total);
   } catch (error) {
     status("IMPORT FAILED", true);
     el.preview.textContent = error.message;
@@ -1022,7 +1211,11 @@ el.uploadButton.onclick = () => el.fileInput.click();
 el.fileInput.onchange = (event) => upload(event.currentTarget.files[0]);
 document.querySelectorAll("[data-demo]").forEach((button) => {
   button.onclick = () =>
-    loadRows(DEMOS[button.dataset.demo], button.textContent, DEMO_CONFIG_OVERRIDES[button.dataset.demo]);
+    loadRows(
+      DEMOS[button.dataset.demo],
+      button.dataset.label || button.textContent.trim(),
+      DEMO_CONFIG_OVERRIDES[button.dataset.demo],
+    );
 });
 el.datasetUrl.onkeydown = (e) => {
   if (e.key === "Enter") remote(e.currentTarget.value.trim());
@@ -1037,6 +1230,40 @@ el.cleanMissing.onchange = applyCleaning;
 el.cleanHideOther.onchange = applyCleaning;
 el.logScale.onchange = render;
 el.maxEntries.oninput = render;
+
+if (el.yColumnTrigger) {
+  el.yColumnTrigger.onclick = (e) => {
+    e.stopPropagation();
+    toggleYMultiselect();
+  };
+  el.yColumnTrigger.onkeydown = (e) => {
+    if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") {
+      e.preventDefault();
+      openYMultiselect();
+    }
+  };
+}
+if (el.yColumnSearch) {
+  el.yColumnSearch.oninput = () => syncYMultiselectUI();
+  el.yColumnSearch.onclick = (e) => e.stopPropagation();
+  el.yColumnSearch.onkeydown = (e) => {
+    if (e.key === "Escape") {
+      closeYMultiselect();
+      el.yColumnTrigger.focus();
+    }
+  };
+}
+document.addEventListener("click", (e) => {
+  if (el.yColumnMultiselect && !el.yColumnMultiselect.contains(e.target)) {
+    closeYMultiselect();
+  }
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && el.yColumnMultiselect && el.yColumnMultiselect.classList.contains("open")) {
+    closeYMultiselect();
+    el.yColumnTrigger.focus();
+  }
+});
 el.appShell.addEventListener("dragenter", (event) => {
   if ([...event.dataTransfer.types].includes("Files")) el.appShell.classList.add("dragging");
 });
@@ -1062,6 +1289,7 @@ el.chartType.onchange = () => {
     let ys = selectedY();
     if (ys.length > 1) selectOnlyY(ys[0]);
   }
+  syncYMultiselectUI();
   render();
 };
 el.xColumn.onchange = () => {
@@ -1070,6 +1298,7 @@ el.xColumn.onchange = () => {
     let numeric = state.columns.filter((c) => c.type === "numeric");
     if (numeric.length) selectOnlyY(pickMetric(numeric));
   }
+  render();
 };
 lucide.createIcons();
 let queryUrl = new URLSearchParams(location.search).get("url");

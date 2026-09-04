@@ -24,36 +24,58 @@
           </p>
         </div>
         <div class="header-actions">
-          <div class="status" id="status" role="status">WAITING FOR DATA</div>
-          <button id="resetButton" class="icon-button" type="button" title="Reset to first visit" aria-label="Reset to first visit"><i data-lucide="rotate-ccw"></i></button>
+          <div id="status" role="status" class="sr-only" aria-live="polite"></div>
+          <button id="resetButton" class="icon-button reset-button" type="button" title="Reset to first visit" aria-label="Reset to first visit"><i data-lucide="rotate-ccw"></i></button>
         </div>
       </header>
-      <section class="panel import">
-        <label class="label" for="datasetUrl">Public dataset URL</label>
-        <div class="url-row">
-          <input
-            id="datasetUrl"
-            type="url"
-            placeholder="https://example.gov/data.csv"
-            autocomplete="url"
-          /><input
-            id="fileInput"
-            type="file"
-            accept=".csv,.txt,.xlsx,.xls,.json,application/json,text/csv,text/plain"
-            hidden
-          /><button id="uploadButton" class="icon-button" type="button" title="Upload a local dataset" aria-label="Upload a local dataset"><i data-lucide="upload"></i></button
-          ><button class="primary" id="loadButton" type="button">
-            <i data-lucide="search"></i>Visualise
-          </button>
+      <section class="panel import" aria-label="Step 1: Source Data">
+        <div class="step-header">
+          <span class="step-badge">1</span>
+          <span class="step-title">Source Data</span>
         </div>
-        <div class="demos" aria-label="Sample datasets">
-          <span>Try a sample</span>
-          <button class="demo" type="button" data-demo="nsw_population">NSW Population</button>
-          <button class="demo" type="button" data-demo="temp_variance">Temp Variance</button>
-          <button class="demo" type="button" data-demo="council_expenditure_2024">City Budgets</button>
-          <button class="demo" type="button" data-demo="commodity_exports">Commodity Exports</button>
-          <button class="demo" type="button" data-demo="penguin_measurements">Penguin Measurements</button>
+        <div class="input-card">
+          <label class="label" for="datasetUrl">Public dataset URL</label>
+          <div class="url-row">
+            <div class="url-input-container">
+              <input
+                id="datasetUrl"
+                type="url"
+                placeholder="https://example.gov/data.csv"
+                autocomplete="url"
+              />
+              <div class="sample-shortcuts" aria-label="Sample datasets">
+                <span class="sample-label">Try sample:</span>
+                <div class="sample-chips">
+                  <button class="demo" type="button" data-demo="nsw_population" data-label="Population (Bar)">
+                    <i data-lucide="chart-column"></i><span>Population (Bar)</span>
+                  </button>
+                  <button class="demo" type="button" data-demo="temp_variance" data-label="Temperature (Line)">
+                    <i data-lucide="chart-line"></i><span>Temperature (Line)</span>
+                  </button>
+                  <button class="demo" type="button" data-demo="council_expenditure_2024" data-label="Budget (Doughnut)">
+                    <i data-lucide="chart-pie"></i><span>Budget (Doughnut)</span>
+                  </button>
+                  <button class="demo" type="button" data-demo="commodity_exports" data-label="Exports (Treemap)">
+                    <i data-lucide="layout-grid"></i><span>Exports (Treemap)</span>
+                  </button>
+                  <button class="demo" type="button" data-demo="penguin_measurements" data-label="Measurements (Scatter)">
+                    <i data-lucide="chart-scatter"></i><span>Measurements (Scatter)</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <input
+              id="fileInput"
+              type="file"
+              accept=".csv,.txt,.xlsx,.xls,.json,application/json,text/csv,text/plain"
+              hidden
+            /><button id="uploadButton" class="icon-button" type="button" title="Upload a local dataset" aria-label="Upload a local dataset"><i data-lucide="upload"></i></button
+            ><button class="primary" id="loadButton" type="button">
+              <i data-lucide="search"></i>Visualise
+            </button>
+          </div>
         </div>
+        <div class="url-error" id="urlError" role="alert" hidden></div>
         <p class="hint">Supports CSV, TXT, XLSX, and JSON. Trimmed to the first 1,000 rows.</p>
         <div class="cleaning" aria-label="Data cleaning">
           <span>Clean values</span>
@@ -78,39 +100,90 @@
             </div>
           </div>
           <div class="toolbar">
-            <div class="control" id="chartTypeControl">
-              <label for="chartType">Chart type</label
-              ><select id="chartType" disabled>
-                <option value="bar">Bar</option>
-                <option value="line">Line</option>
-                <option value="doughnut">Doughnut</option>
-                <option value="treemap">Treemap</option>
-                <option value="scatter">Scatter</option>
-              </select>
+            <!-- Step 2: Field Selection -->
+            <div class="workflow-group" id="fieldSelectionGroup">
+              <div class="step-header">
+                <span class="step-badge">2</span>
+                <span class="step-title">Field Selection</span>
+              </div>
+              <div class="step-controls field-controls">
+                <div class="control" id="xColumnControl">
+                  <label for="xColumn" id="xColumnLabel">X axis / group</label>
+                  <div class="control-input-wrap">
+                    <select id="xColumn" disabled></select>
+                  </div>
+                  <span class="micro" id="xColumnHint">Category or independent field</span>
+                </div>
+                <div class="control" id="yColumnControl">
+                  <label for="yColumnTrigger" id="yColumnLabel">Y axis / metric</label>
+                  <div class="control-input-wrap">
+                    <div class="multiselect disabled" id="yColumnMultiselect">
+                      <div class="multiselect-trigger" id="yColumnTrigger" tabindex="0" role="combobox" aria-expanded="false" aria-haspopup="listbox" aria-label="Y axis metric selection">
+                        <div class="multiselect-tags" id="yColumnTags">
+                          <span class="multiselect-placeholder">Select metrics...</span>
+                        </div>
+                        <span class="multiselect-arrow"><i data-lucide="chevron-down"></i></span>
+                      </div>
+                      <div class="multiselect-dropdown" id="yColumnDropdown" hidden>
+                        <div class="multiselect-search-wrap">
+                          <input type="search" id="yColumnSearch" class="multiselect-search" placeholder="Search metrics..." autocomplete="off" />
+                        </div>
+                        <div class="multiselect-options" id="yColumnOptions" role="listbox" aria-multiselectable="true"></div>
+                      </div>
+                    </div>
+                    <select id="yColumn" multiple hidden disabled></select>
+                  </div>
+                  <span class="micro" id="yColumnHint">Select metrics to compare</span>
+                </div>
+              </div>
             </div>
-            <div class="control" id="xColumnControl">
-              <label for="xColumn" id="xColumnLabel">X axis / group</label
-              ><select id="xColumn" disabled></select>
-            </div>
-            <div class="control" id="yColumnControl">
-              <label for="yColumn" id="yColumnLabel">Y axis / metric</label
-              ><select id="yColumn" multiple size="3" disabled></select
-              ><span class="micro">Cmd/Ctrl-click to compare series</span>
-            </div>
-            <div class="control" id="maxEntriesControl">
-              <label for="maxEntries">Show top N</label
-              ><input type="range" id="maxEntries" min="5" max="50" value="10" disabled
-              /><span class="micro" id="maxEntriesValue">All groups</span>
-            </div>
-            <div class="control" id="logScaleControl">
-              <label class="checkbox-label" for="logScale"
-                ><input type="checkbox" id="logScale" disabled /> Log scale (Y)</label
-              ><span class="micro" id="logScaleHint">Needs a positive-only metric</span>
-            </div>
-            <div class="control" id="renderControl">
-              <button id="renderButton" type="button" disabled title="Apply chart settings">
-                <i data-lucide="refresh-cw"></i>Render
-              </button>
+
+            <!-- Step 3: Chart Configuration -->
+            <div class="workflow-group" id="chartConfigGroup">
+              <div class="step-header">
+                <span class="step-badge">3</span>
+                <span class="step-title">Chart Configuration</span>
+              </div>
+              <div class="step-controls config-controls">
+                <div class="control" id="chartTypeControl">
+                  <label for="chartType">Chart type</label>
+                  <div class="control-input-wrap">
+                    <select id="chartType" disabled>
+                      <option value="bar">Bar</option>
+                      <option value="line">Line</option>
+                      <option value="doughnut">Doughnut</option>
+                      <option value="treemap">Treemap</option>
+                      <option value="scatter">Scatter</option>
+                    </select>
+                  </div>
+                  <span class="micro">Visual style</span>
+                </div>
+                <div class="control" id="maxEntriesControl">
+                  <label for="maxEntries">Show top N</label>
+                  <div class="control-input-wrap slider-input-wrap">
+                    <input type="range" id="maxEntries" min="5" max="50" value="10" disabled />
+                  </div>
+                  <span class="micro" id="maxEntriesValue">All groups</span>
+                </div>
+                <div class="control" id="logScaleControl">
+                  <label for="logScale">Y Scale</label>
+                  <div class="control-input-wrap checkbox-input-wrap">
+                    <label class="checkbox-label" for="logScale">
+                      <input type="checkbox" id="logScale" disabled /><span>Log scale (Y)</span>
+                    </label>
+                  </div>
+                  <span class="micro" id="logScaleHint">Needs a positive-only metric</span>
+                </div>
+                <div class="control" id="renderControl">
+                  <label class="render-label" aria-hidden="true">&nbsp;</label>
+                  <div class="control-input-wrap button-input-wrap">
+                    <button id="renderButton" class="render-btn" type="button" disabled title="Apply chart settings">
+                      <i data-lucide="refresh-cw"></i><span>Render</span>
+                    </button>
+                  </div>
+                  <span class="micro" aria-hidden="true">&nbsp;</span>
+                </div>
+              </div>
             </div>
           </div>
           <div class="chart-area" id="chartArea">
